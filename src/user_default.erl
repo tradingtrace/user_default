@@ -23,7 +23,8 @@
     io:format(Format++"~n", Args)).
 
 -define(COMPILE_OPTS, [debug_info]).
--define(BUILD_LIB, "_build/**/lib").
+-define(BUILD_DIR, "_build").
+-define(CHECKOUTS_DIR, "_checkouts").
 
 %%====================================================================
 %% API functions
@@ -57,10 +58,12 @@ ucl(Mods) ->
 compile_and_load(Mods, IsUpdate) ->
     case catch
         [begin
-             case catch find_source(Mod) of
-                 undefined ->
-                     throw({error, {no_mod, Mod}});
-                 {ok, SourceList} ->
+             SourceInBuild = find_source(Mod, ?BUILD_DIR),
+             SourceInCheckouts = find_source(Mod, ?CHECKOUTS_DIR),
+             case SourceInBuild ++ SourceInCheckouts of
+                 [] ->
+                     throw({error, {mod_not_fount, Mod}});
+                 SourceList ->
                      ?PRINT("~ncompiling: ~s", [SourceList]),
                      [compile(Mod, Source) || Source <- SourceList]
              end
@@ -90,12 +93,9 @@ load([FileName | T]) ->
 load(FileName) when is_atom(FileName) ->
     load([FileName]).
 
-find_source(Mod) ->
+find_source(Mod, Root) ->
     FileName = atom_to_list(Mod) ++ ".erl",
-    case filelib:wildcard(filename:join([?BUILD_LIB, "**", FileName])) of
-        [] -> undefined;
-        SourceList -> {ok, SourceList}
-    end.
+    filelib:wildcard(filename:join([Root, "**", FileName])).
 
 compile(Mod, Source) ->
     SrcDir = filename:dirname(Source),
