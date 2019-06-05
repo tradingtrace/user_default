@@ -23,8 +23,6 @@
     io:format(Format++"~n", Args)).
 
 -define(COMPILE_OPTS, [debug_info]).
--define(REBAR_BUILD, "_build").
--define(REBAR_CHECKOUTS, "_checkouts").
 
 %%====================================================================
 %% API functions
@@ -98,11 +96,15 @@ compile(Mod, Source) ->
     end.
 
 find_source(Mod) ->
-    CompileInfo = Mod:module_info(compile),
-    case proplists:get_value(source, CompileInfo) of
-        undefined ->
-            throw({error, {compile_failed, source_not_found, Mod}});
-        Source -> Source
+    case catch Mod:module_info(compile) of
+        {'EXIT', _} ->
+            throw({error, {compile_failed, undefined_module, Mod}});
+        CompileInfo ->
+            case proplists:get_value(source, CompileInfo) of
+                undefined ->
+                    throw({error, {compile_failed, source_not_found, Mod}});
+                Source -> Source
+            end
     end.
 
 find_outdir(Mod) ->
