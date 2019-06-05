@@ -23,8 +23,8 @@
     io:format(Format++"~n", Args)).
 
 -define(COMPILE_OPTS, [debug_info]).
--define(BUILD_DIR, "_build").
--define(CHECKOUTS_DIR, "_checkouts").
+-define(REBAR_BUILD, "_build").
+-define(REBAR_CHECKOUTS, "_checkouts").
 
 %%====================================================================
 %% API functions
@@ -56,19 +56,7 @@ ucl(Mods) ->
 %% Internal functions
 %%====================================================================
 compile_and_load(Mods, IsUpdate) ->
-    case catch
-        [begin
-             SourceInBuild = find_source(Mod, ?BUILD_DIR),
-             SourceInCheckouts = find_source(Mod, ?CHECKOUTS_DIR),
-             case SourceInBuild ++ SourceInCheckouts of
-                 [] ->
-                     throw({error, {mod_not_fount, Mod}});
-                 SourceList ->
-                     ?PRINT("~ncompiling: ~s", [SourceList]),
-                     [compile(Mod, Source) || Source <- SourceList]
-             end
-         end || Mod <- Mods]
-    of
+    case catch [compile(Mod, find_source(Mod)) || Mod <- Mods] of
         {error, _} = Errors ->
             Errors;
         Result ->
@@ -93,15 +81,8 @@ load([FileName | T]) ->
 load(FileName) when is_atom(FileName) ->
     load([FileName]).
 
-find_source(Mod, Root) ->
-    FileName = atom_to_list(Mod) ++ ".erl",
-    filelib:wildcard(filename:join([Root, "**", FileName])).
-
 compile(Mod, Source) ->
-    SrcDir = filename:dirname(Source),
-    BaseDir = filename:dirname(SrcDir),
-    EbinDir = filename:join([BaseDir, "ebin"]),
-    Opts = [{outdir, EbinDir} | ?COMPILE_OPTS],
+    Opts = [{outdir, find_outdir(Mod)} | ?COMPILE_OPTS],
     case compile:file(Source, Opts) of
         {ok, _Data} ->
             ?PRINT("compile success: ~p!", [_Data]),
@@ -114,4 +95,22 @@ compile(Mod, Source) ->
             throw({error, {compile_failed, Mod}});
         {error, Errors, Warnings} ->
             throw({error, {compile_failed, Mod, {error, Errors}, {warnings, Warnings}}})
+    end.
+
+find_source(Mod) ->
+    CompileInfo = Mod:module_info(compile),
+    case proplists:get_value(source, CompileInfo) of
+        undefined ->
+            throw({error, {compile_failed, source_not_found, Mod}});
+        Source -> Source
+    end.
+
+find_outdir(Mod) ->
+    case code:is_loaded(Mod) of
+        {file, "" ++ BeamPath} ->
+            filename:dirname(BeamPath);
+        false ->
+            throw({error, {compile_failed, not_loaded, Mod}});
+        {file, Atom} ->
+            throw({error, {compile_failed, Atom, Mod}})
     end.
