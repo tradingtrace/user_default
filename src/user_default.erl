@@ -22,8 +22,6 @@
 -define(PRINT(Format, Args),
     io:format(Format++"~n", Args)).
 
--define(COMPILE_OPTS, [debug_info]).
-
 %%====================================================================
 %% API functions
 %%====================================================================
@@ -80,7 +78,7 @@ load(FileName) when is_atom(FileName) ->
     load([FileName]).
 
 compile(Mod, Source) ->
-    Opts = [{outdir, find_outdir(Mod)} | ?COMPILE_OPTS],
+    Opts = [{outdir, find_outdir(Mod)} | find_options(Mod)],
     case compile:file(Source, Opts) of
         {ok, _Data} ->
             ?PRINT("compile success: ~p!", [_Data]),
@@ -104,6 +102,18 @@ find_source(Mod) ->
                 undefined ->
                     throw({error, {compile_failed, source_not_found, Mod}});
                 Source -> Source
+            end
+    end.
+
+find_options(Mod) ->
+    case catch Mod:module_info(compile) of
+        {'EXIT', _} ->
+            throw({error, {compile_failed, undefined_module, Mod}});
+        CompileInfo ->
+            case proplists:get_value(options, CompileInfo) of
+                undefined ->
+                    throw({error, {compile_failed, options_not_found, Mod}});
+                Options -> Options
             end
     end.
 
